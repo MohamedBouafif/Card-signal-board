@@ -27,6 +27,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Install project (editable)
+      run: |
+        pip install -e .
+    
     - name: Run pytest
       run: |
         pip install pytest pytest-cov httpx
