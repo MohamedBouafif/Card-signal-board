@@ -1,30 +1,18 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-.venv
-
-# Git
-.git/
+# .dockerignore
+__pycache__
+*.pyc
+.git
 .gitignore
-
-# IDE
-.vscode/
+.env
+.venv
+venv/
+node_modules/
+.pytest_cache/
+.coverage
+*.egg-info/
+dist/
+build/
+.DS_Store
 .idea/
 *.swp
 *.swo
-
-# Tests
-tests/
-.pytest_cache/
-
-# Docs
-docs/
-*.md
-
-# CI/CD
-.github/
