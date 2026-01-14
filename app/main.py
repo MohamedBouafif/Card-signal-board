@@ -2,6 +2,27 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from datetime import datetime, timedelta
 import uuid
+import logging
+from prometheus_client import Counter, Histogram, generate_latest
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("card-signal")
+
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "card_requests_total",
+    "Total requests by endpoint",
+    ["endpoint"]
+)
+RESPONSE_TIME = Histogram(
+    "card_response_seconds",
+    "Response time in seconds",
+    ["endpoint"]
+)
 
 # Data Models
 class Card(BaseModel):
@@ -26,6 +47,18 @@ app = FastAPI(
     title="Card Signal Board",
     description="Create ephemeral academic signal cards with 7-day TTL"
 )
+
+# Middleware for request tracing
+@app.middleware("http")
+async def trace_requests(request, call_next):
+    """Trace all requests with unique ID"""
+    request_id = str(uuid.uuid4())[:8]
+    REQUEST_COUNT.labels(endpoint=request.url.path).inc()
+    logger.info(f"[{request_id}] {request.method} {request.url.path}")
+    
+    response = await call_next(request)
+    logger.info(f"[{request_id}] Response: {response.status_code}")
+    return response
 
 # Helper functions
 def generate_token():
@@ -54,6 +87,7 @@ async def create_card(card: Card):
         "expires_at": expires_at
     }
     
+    logger.info(f"Card created: {card_id} | Email: {card.email}")
     return cards_db[card_id]
 
 @app.get("/cards")
@@ -63,6 +97,7 @@ async def list_cards():
         k: v for k, v in cards_db.items()
         if not is_expired(v["expires_at"])
     }
+    logger.info(f"Listed {len(active_cards)} active cards")
     return list(active_cards.values())
 
 @app.get("/cards/{card_id}")
@@ -79,6 +114,7 @@ async def delete_card(card_id: str, token: str):
         raise HTTPException(status_code=403, detail="Unauthorized: invalid token")
     
     del cards_db[card_id]
+    logger.info(f"Card deleted: {card_id}")
     return {"message": "Card deleted successfully"}
 
 @app.get("/verify/{token}")
@@ -86,12 +122,18 @@ async def verify_token(token: str):
     """Verify email token ownership"""
     for card_id, card in cards_db.items():
         if card["token"] == token and not is_expired(card["expires_at"]):
+            logger.info(f"Token verified for card: {card_id}")
             return {
                 "verified": True,
                 "card_id": card_id,
                 "email": card["email"]
             }
     raise HTTPException(status_code=404, detail="Token not found or invalid")
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return generate_latest()
 
 @app.get("/health")
 async def health():
