@@ -27,7 +27,7 @@ jobs:
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-      if: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' }}
+      if: github.event_name != 'pull_request'
       continue-on-error: true
     
     - name: Extract metadata
@@ -46,18 +46,13 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
-        push: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' }}
+        push: ${{ github.event_name != 'pull_request' && github.repository == github.event.repository.full_name }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
       if: github.event_name != 'pull_request'
     
-    - name: Build Docker image (PR only)
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        file: ./Dockerfile
-        push: false
-        cache-from: type=gha
-      if: github.event_name == 'pull_request'
+    - name: Image digest
+      run: echo "Image pushed with digest ${{ steps.build-and-push.outputs.digest }}"
+      if: github.event_name != 'pull_request' && steps.build-and-push.outputs.digest != ''
